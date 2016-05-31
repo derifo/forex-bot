@@ -29,9 +29,32 @@ class BaseStrategy(object):
             raise Exception('Instrument was not found!')
 
     def tick(self, asc, bid, date):
-        pass
+        if 'buy' in self.orders:
+            for order_key in list(self.orders['buy']):
+                if 'buy' in self.orders and self.orders['buy'][order_key]['take_profit']:
+                    if asc >= self.orders['buy'][order_key]['take_profit'] + self.orders['buy'][order_key]['price']:
+                        logger.info('Take Profit! Price: {}'.format(asc))
+                        self.set_order(self.orders['buy'][order_key]['price'],
+                                       self.orders['buy'][order_key]['count'], 'sell')
+                if 'buy' in self.orders and self.orders['buy'][order_key]['stop_loss']:
+                    if asc <= self.orders['buy'][order_key]['price'] - self.orders['buy'][order_key]['stop_loss']:
+                        logger.info('Stop Loss! Price: {}'.format(asc))
+                        self.set_order(self.orders['buy'][order_key]['price'],
+                                       self.orders['buy'][order_key]['count'], 'sell')
+        if 'sell' in self.orders:
+            for order_key in list(self.orders['sell']):
+                if 'sell' in self.orders and self.orders['sell'][order_key]['take_profit']:
+                    if asc <= self.orders['sell'][order_key]['price'] - self.orders['sell'][order_key]['take_profit']:
+                        logger.info('Take Profit! Price: {}'.format(asc))
+                        self.set_order(self.orders['sell'][order_key]['price'],
+                                       self.orders['sell'][order_key]['count'], 'buy')
+                if 'sell' in self.orders and self.orders['sell'][order_key]['stop_loss']:
+                    if asc >= self.orders['sell'][order_key]['stop_loss'] + self.orders['sell'][order_key]['price']:
+                        logger.info('Stop Loss! Price: {}'.format(asc))
+                        self.set_order(self.orders['sell'][order_key]['price'],
+                                       self.orders['sell'][order_key]['count'], 'buy')
 
-    def set_order(self, price, count, type):
+    def set_order(self, price, count, type, take_profit=0, stop_loss=0):
         if price <= 0:
             return False
         logger.debug('You try {} instrument (count: {}, price:{})!'.format(type, count, price))
@@ -39,7 +62,7 @@ class BaseStrategy(object):
             raise Exception('Unknow type!')
         point_price = self.price_point(price)
         min_balance = point_price*count/self.trade.shoulder
-        logger.info('Point price is {}.'.format(point_price))
+        logger.debug('Point price is {}.'.format(point_price))
         if type == 'buy':
             type_invert = 'sell'
         else:
@@ -53,9 +76,13 @@ class BaseStrategy(object):
             if type not in self.orders:
                 self.orders[type] = {}
             if self.balance >= point_price*count:
-                self.orders[type] = {uuid.uuid4(): {'count': count, 'price': price}}
+                self.orders[type] = {uuid.uuid4(): {'count': count, 'price': float(price),
+                                                    'take_profit': float(take_profit)*float(self.pip),
+                                                    'stop_loss': float(stop_loss)*float(self.pip)}}
                 self.balance -= point_price*count
-                logger.info('You made to {}. Sum is {}. Balance: {}'.format(type, point_price*count, self.balance))
+                logger.info('You made to {}. Price: {} Sum is {}. Balance: {} Orders: {}/{}'.format(
+                    type, price, round(point_price*count,2), self.balance, len(self.orders['buy']
+                    if 'buy' in self.orders else []), len(self.orders['sell'] if 'sell' in self.orders else [])))
                 return {'count': count, 'price': price}
             else:
                 logger.warning('You not have enough money!')
@@ -65,11 +92,15 @@ class BaseStrategy(object):
                 if self.orders[type_invert][order_key]['count'] == count:
                     del self.orders[type_invert][order_key]
                     self.balance += count+point_price
-                    logger.info('You made to {}. Sum is {}. Balance: {}'.format(type, point_price*count, self.balance))
+                    logger.info('You made to {}. Price: {} Sum is {}. Balance: {} Orders: {}/{}'.format(
+                        type, price, round(point_price*count,2), self.balance, len(self.orders['buy']
+                        if 'buy' in self.orders else []), len(self.orders['sell'] if 'sell' in self.orders else [])))
                 elif self.orders[type_invert][order_key]['count'] > count:
                     self.orders[type_invert][order_key]['count'] -= count
                     self.balance += count+point_price
-                    logger.info('You made to {}. Sum is {}. Balance: {}'.format(type, point_price*count, self.balance))
+                    logger.info('You made to {}. Price: {} Sum is {}. Balance: {} Orders: {}/{}'.format(
+                        type, price, round(point_price*count,2), self.balance, len(self.orders['buy']
+                        if 'buy' in self.orders else []), len(self.orders['sell'] if 'sell' in self.orders else [])))
                 elif self.orders[type_invert][order_key]['count'] < count:
                     diff_count = count - self.orders[type_invert][order_key]['count']
                     self.set_order(price, self.orders[type_invert][order_key]['count'], type)

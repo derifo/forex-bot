@@ -15,7 +15,7 @@ logger.setLevel(logging.INFO)
 
 
 class MyStrategy(BaseStrategy):
-    type = 'buy'
+    type = 'sell'
     balance_store = {}
     price_store = []
     deal_store_sell = []
@@ -27,7 +27,7 @@ class MyStrategy(BaseStrategy):
     def execute(self, asc, bid, date):
         date = datetime.strptime(date.split('.')[0], '%Y-%m-%dT%H:%M:%S')
         self.price_store.append([date, asc])
-        if self.set_order(asc, 1, self.type):
+        if self.set_order(asc, 1, self.type, stop_loss=10, take_profit=10):
             if self.type == 'buy':
                 self.deal_store_buy.append([date, asc])
                 self.type = 'sell'
